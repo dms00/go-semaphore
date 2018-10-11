@@ -92,11 +92,11 @@ type Semaphore struct {
 	sem *semaphore
 }
 
-func (s *Semaphore)P() {
+func (s *Semaphore) P() {
 	s.sem.p()
 }
 
-func (s *Semaphore)V() {
+func (s *Semaphore) V() {
 	s.sem.v()
 }
 
