@@ -107,3 +107,84 @@ func NewSemaphore(cnt int) *Semaphore {
 	return s
 }
 ```
+
+Here's a third version that adds a non-blocking P that returns boolean to let caller know if it succeeded, renames P and V to the better-known Acquire and Release, and lastly panics if Release is attempted when there are no semaphores left to release.
+
+```go
+package semaphore
+
+import (
+	"sync"
+)
+
+type semaphore struct {
+	initialCnt int
+	cnt  int
+	cond *sync.Cond
+}
+
+func (s *semaphore) v() {
+	s.cond.L.Lock()
+	defer s.cond.L.Unlock()
+
+	if s.cnt < s.initialCnt {
+		s.cnt++
+		s.cond.Signal()
+	} else {
+		panic("No semaphores to release")
+	}
+}
+
+func (s *semaphore) p() {
+	s.cond.L.Lock()
+	defer s.cond.L.Unlock()
+	
+	for done := false; !done; {
+		if s.cnt > 0 {
+			s.cnt--
+			done = true
+		} else {
+			s.cond.Wait()
+		}
+	}
+}
+
+func (s *semaphore) tryP() bool {
+	s.cond.L.Lock()
+	defer s.cond.L.Unlock()
+	result := false
+	
+	if s.cnt > 0 {
+		s.cnt--
+		result = true
+	}
+	return result
+}
+
+func newSemaphore(cnt int) *semaphore {
+	return &semaphore{initialCnt: cnt, cnt: cnt, cond: sync.NewCond(new(sync.Mutex))}
+}
+
+type Semaphore struct {
+	sem *semaphore
+}
+
+func (s *Semaphore) TryAcquire() bool {
+	return s.sem.tryP()
+}
+
+func (s *Semaphore) Acquire() {
+	s.sem.p()
+}
+
+func (s *Semaphore) Release() {
+	s.sem.v()
+}
+
+func New(cnt int) *Semaphore {
+	s := new(Semaphore)
+	s.sem = newSemaphore(cnt)
+
+	return s
+}
+```
